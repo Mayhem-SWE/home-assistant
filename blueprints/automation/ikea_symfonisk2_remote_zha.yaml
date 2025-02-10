@@ -1,0 +1,423 @@
+blueprint:
+  name: "IKEA Symfonisk Remote (ZHA)"
+  author: "Magnus Helin <magnus.helin@gmail.com>"
+  source_url: "https://github.com/Mayhem-SWE/home-assistant/blob/main/blueprints/automation/ikea_symfonisk2_remote_zha.yaml"
+  description: |-
+    Control media players using an IKEA Symfonisk media remote (gen 2) on the ZHA integration.
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  input:
+    remote_device:
+      name: "Symfonisk remote"
+      description: "An IKEA Symfonisk media remote (gen 2)."
+      selector:
+        device:
+          filter:
+            integration: zha
+            manufacturer: "IKEA of Sweden"
+            model: "SYMFONISK sound remote gen2"
+    player_entities:
+      name: "Media player(s)"
+      description: "Media player(s) to control. If more than one, a dropdown helper is required (below)."
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: media_player
+    select_entity:
+      name: "Dropdown helper"
+      description: "Stores the current player. Only required for switching between multiple players."
+      selector:
+        entity:
+          filter:
+            domain: input_select
+      default:
+    settings:
+      name: "Additional settings"
+      icon: mdi:cog
+      collapsed: true
+      input:
+        media_volume_group:
+          name: "Media volume up/down/mute group"
+          description: "Send volume up/down/mute to all media players within same group."
+          selector:
+            boolean:
+          default: true
+        media_previous_seek:
+          name: "Media previous track/seek threshold"
+          description: "Threshold for when to step to previous track versus seek to beginning."
+          selector:
+            number:
+              min: 0
+              max: 5
+              step: 0.5
+              unit_of_measurement: "seconds"
+          default: 2.5
+        media_sonos_spotify:
+          name: "Media seek Sonos/Spotify workaround"
+          description: "Workaround for media position not updating on Sonos with Spotify Connect."
+          selector:
+            boolean:
+          default: true
+        select_label:
+          name: "Select option label"
+          description: "Label for options in dropdown helper. Must not be identical between players."
+          selector:
+            select:
+              mode: list
+              options:
+              - label: "Media player object ID"
+                value: "object_id"
+              - label: "Media player entity name"
+                value: "entity_name"
+              - label: "Media player device name"
+                value: "device_name"
+          default: "entity_name"
+        select_cycle:
+          name: "Select cycles around"
+          description: "Next/previous player will cycle around to first/last player."
+          selector:
+            boolean:
+          default: false
+
+    buttons:
+      name: "Button mappings"
+      description: "*Button mappings only enabled when used with a single media player.*"
+      icon: mdi:robot
+      collapsed: true
+      input:
+        button_1_short_press:
+          name: "● Button one — Single click"
+          description: "A single short button press."
+          selector:
+            action:
+          default:
+        button_1_double_press:
+          name: "● Button one — Double click"
+          description: "Two short sequential button presses."
+          selector:
+            action:
+          default:
+        button_1_long_press:
+          name: "● Button one — Long hold"
+          description: "While holding button pressed."
+          selector:
+            action:
+          default:
+        button_1_long_release:
+          name: "● Button one — Long release"
+          description: "After held button is released."
+          selector:
+            action:
+          default:
+        button_1_initial_press:
+          name: "● Button one — Initial press"
+          description: "Before either click or hold."
+          selector:
+            action:
+          default:
+        button_2_short_press:
+          name: "● ● Button two — Single click"
+          description: "A single short button press."
+          selector:
+            action:
+          default:
+        button_2_double_press:
+          name: "● ● Button two — Double click"
+          description: "Two short sequential button presses."
+          selector:
+            action:
+          default:
+        button_2_long_press:
+          name: "● ● Button two — Long hold"
+          description: "While holding button pressed."
+          selector:
+            action:
+          default:
+        button_2_long_release:
+          name: "● ● Button two — Long release"
+          description: "After held button is released."
+          selector:
+            action:
+          default:
+        button_2_initial_press:
+          name: "● ● Button two — Initial press"
+          description: "Before either click or hold."
+          selector:
+            action:
+          default:
+
+mode: queued
+max_exceeded: silent
+trigger_variables:
+  player_entities: !input player_entities
+  select_entity: !input select_entity
+  select_label: !input select_label
+  select_cycle: !input select_cycle
+  media_volume_group: !input media_volume_group
+  media_previous_seek: !input media_previous_seek
+  media_sonos_spotify: !input media_sonos_spotify
+triggers:
+- trigger: state
+  entity_id: !input player_entities
+  enabled: false
+
+- id: media_play_pause
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: toggle
+- id: media_next_track
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: right
+- id: media_previous_track
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: left
+- id: volume_up
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: dim_up
+- id: volume_down
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: dim_down
+- id: volume_mute
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: dim_down
+- id: volume_unmute
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: dim_up
+
+- trigger: event
+  event_type: automation_reloaded
+  enabled: "{{ select_entity is not none }}"
+- trigger: template
+  value_template: "{{ is_state(this.entity_id, 'on') }}"
+  enabled: "{{ select_entity is not none }}"
+- trigger: state
+  entity_id: !input player_entities
+  attribute: friendly_name
+  enabled: "{{ select_entity is not none }}"
+- id: select_next
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: button_2
+  enabled: "{{ select_entity is not none and player_entities | count > 1 }}"
+- id: select_previous
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: button_1
+  enabled: "{{ select_entity is not none and player_entities | count > 1 }}"
+- id: select_first
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: button_1
+  enabled: "{{ select_entity is not none and player_entities | count > 1 }}"
+- id: select_last
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: button_2
+  enabled: "{{ select_entity is not none and player_entities | count > 1 }}"
+
+- id: button_1_short_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: button_1
+  enabled: "{{ select_entity is none }}"
+- id: button_1_double_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_double_press
+  subtype: button_1
+  enabled: "{{ select_entity is none }}"
+- id: button_1_long_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: button_1
+  enabled: "{{ select_entity is none }}"
+- id: button_1_long_release
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_release
+  subtype: button_1
+  enabled: "{{ select_entity is none }}"
+- id: button_1_initial_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: initial_switch_press
+  subtype: button_1
+  enabled: "{{ select_entity is none }}"
+- id: button_2_short_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_short_press
+  subtype: button_2
+  enabled: "{{ select_entity is none }}"
+- id: button_2_double_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_double_press
+  subtype: button_2
+  enabled: "{{ select_entity is none }}"
+- id: button_2_long_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_press
+  subtype: button_2
+  enabled: "{{ select_entity is none }}"
+- id: button_2_long_release
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: remote_button_long_release
+  subtype: button_2
+  enabled: "{{ select_entity is none }}"
+- id: button_2_initial_press
+  trigger: device
+  domain: zha
+  device_id: !input remote_device
+  type: initial_switch_press
+  subtype: button_2
+  enabled: "{{ select_entity is none }}"
+
+variables:
+  select_options: >-
+    {% if select_entity is not none %}
+      {% if select_label == 'entity_name' %}
+        {{ dict(zip(player_entities | map('state_attr', 'friendly_name') | list, player_entities)) }}
+      {% elif select_label == 'device_name' %}
+        {{ dict(zip(player_entities | map('device_attr', 'name_by_user') | list, player_entities)) }}
+      {% else %}
+        {{ dict(zip(player_entities | map('replace', 'media_player.', '') | list, player_entities)) }}
+      {% endif %}
+    {% endif %}
+  player_entity: >-
+    {{ select_options[states(select_entity)] if select_entity is not none
+    and states(select_entity) in select_options else player_entities | first }}
+actions:
+- if: "{{ select_entity is not none }}"
+  then:
+  - action: input_select.set_options
+    data:
+      entity_id: !input select_entity
+      options: "{{ select_options | list }}"
+  - action: input_select.select_option
+    data:
+      entity_id: !input select_entity
+      option: "{{ dict(zip(select_options.values(), select_options.keys()))[player_entity] }}"
+- condition: "{{ trigger.platform == 'device' }}"
+- choose:
+
+  - conditions: >-
+      {{ trigger.id == 'media_previous_track' and bool(media_previous_seek)
+      and is_state(player_entity, ['playing', 'paused'])
+      and media_previous_seek <= state_attr(player_entity, 'media_position') +
+      (now().timestamp() - state_attr(player_entity, 'media_position_updated_at').timestamp()
+      if is_state(player_entity, 'playing') else 0) }}
+    sequence:
+    - if: >-
+        {{ media_sonos_spotify and player_entity in integration_entities('sonos')
+        and is_state_attr(player_entity, 'source', 'Spotify Connect') }}
+      then:
+      - variables:
+          media_play_pause: "{{ ['media_play', 'media_pause'] | sort(reverse=is_state(player_entity, 'paused')) }}"
+      - action: "media_player.{{ media_play_pause | first }}"
+        data:
+          entity_id: "{{ player_entity }}"
+      - action: media_player.media_seek
+        data:
+          entity_id: "{{ player_entity }}"
+          seek_position: 0
+      - action: "media_player.{{ media_play_pause | last }}"
+        data:
+          entity_id: "{{ player_entity }}"
+      else:
+      - action: media_player.media_seek
+        data:
+          entity_id: "{{ player_entity }}"
+          seek_position: 0
+  - conditions: "{{ trigger.id in ['media_play_pause', 'media_next_track', 'media_previous_track'] }}"
+    sequence:
+    - action: "media_player.{{ trigger.id }}"
+      data:
+        entity_id: "{{ player_entity }}"
+  - conditions: "{{ trigger.id in ['volume_up', 'volume_down'] }}"
+    sequence:
+    - action: "media_player.{{ trigger.id }}"
+      data:
+        entity_id: "{{ media_volume_group and state_attr(player_entity, 'group_members') or player_entity }}"
+  - conditions: "{{ trigger.id in ['volume_mute', 'volume_unmute'] }}"
+    sequence:
+    - action: media_player.volume_mute
+      data:
+        entity_id: "{{ media_volume_group and state_attr(player_entity, 'group_members') or player_entity }}"
+        is_volume_muted: "{{ trigger.id == 'volume_mute' }}"
+
+  - conditions: "{{ trigger.id in ['select_first', 'select_last'] }}"
+    sequence:
+    - action: "input_select.{{ trigger.id }}"
+      data:
+        entity_id: !input select_entity
+  - conditions: "{{ trigger.id in ['select_next', 'select_previous'] }}"
+    sequence:
+    - action: "input_select.{{ trigger.id }}"
+      data:
+        entity_id: !input select_entity
+        cycle: "{{ select_cycle }}"
+
+  - conditions: "{{ trigger.id == 'button_1_short_press' }}"
+    sequence: !input button_1_short_press
+  - conditions: "{{ trigger.id == 'button_1_double_press' }}"
+    sequence: !input button_1_double_press
+  - conditions: "{{ trigger.id == 'button_1_long_press' }}"
+    sequence: !input button_1_long_press
+  - conditions: "{{ trigger.id == 'button_1_long_release' }}"
+    sequence: !input button_1_long_release
+  - conditions: "{{ trigger.id == 'button_1_initial_press' }}"
+    sequence: !input button_1_initial_press
+  - conditions: "{{ trigger.id == 'button_2_short_press' }}"
+    sequence: !input button_2_short_press
+  - conditions: "{{ trigger.id == 'button_2_double_press' }}"
+    sequence: !input button_2_double_press
+  - conditions: "{{ trigger.id == 'button_2_long_press' }}"
+    sequence: !input button_2_long_press
+  - conditions: "{{ trigger.id == 'button_2_long_release' }}"
+    sequence: !input button_2_long_release
+  - conditions: "{{ trigger.id == 'button_2_initial_press' }}"
+    sequence: !input button_2_initial_press
